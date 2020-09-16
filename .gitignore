@@ -1,0 +1,6 @@
+**/bin/**
+**/obj/**
+Products.db
+**/LICENSE*
+**/css/bootstrap-*
+**/js/bootstrap.bundle*
