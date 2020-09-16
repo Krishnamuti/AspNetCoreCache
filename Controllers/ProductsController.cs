@@ -7,22 +7,35 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using AspNetCoreCache.Data;
 using AspNetCoreCache.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace AspNetCoreCache.Controllers
 {
     public class ProductsController : Controller
     {
-        private readonly ProductContext _context;
 
-        public ProductsController(ProductContext context)
+        private readonly ProductContext _context;
+        private readonly IMemoryCache _cache;
+
+        public ProductsController(ProductContext context, IMemoryCache cache)
         {
             _context = context;
+            _cache = cache;
         }
 
         // GET: Products
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Products.ToListAsync());
+            var cacheKey = "Products";
+            
+            var products = await _cache.GetOrCreateAsync<List<Product>>(cacheKey, async entry => {
+
+                entry.SlidingExpiration = TimeSpan.FromSeconds(10);
+                entry.AbsoluteExpiration = DateTimeOffset.Now.AddSeconds(30);
+                return await _context.Products.ToListAsync();
+            });
+
+            return View(products);
         }
 
         // GET: Products/Details/5
