@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using AspNetCoreCache.Data;
 using AspNetCoreCache.Models;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
 
 namespace AspNetCoreCache.Controllers
 {
@@ -15,9 +17,9 @@ namespace AspNetCoreCache.Controllers
     {
 
         private readonly ProductContext _context;
-        private readonly IMemoryCache _cache;
+        private readonly IDistributedCache _cache;
 
-        public ProductsController(ProductContext context, IMemoryCache cache)
+        public ProductsController(ProductContext context, IDistributedCache cache)
         {
             _context = context;
             _cache = cache;
@@ -27,13 +29,23 @@ namespace AspNetCoreCache.Controllers
         public async Task<IActionResult> Index()
         {
             var cacheKey = "Products";
-            
-            var products = await _cache.GetOrCreateAsync<List<Product>>(cacheKey, async entry => {
+            var products = new List<Product>();
 
-                entry.SlidingExpiration = TimeSpan.FromSeconds(10);
-                entry.AbsoluteExpiration = DateTimeOffset.Now.AddSeconds(30);
-                return await _context.Products.ToListAsync();
-            });
+            var json = await _cache.GetStringAsync(cacheKey);
+            if(json != null)
+            {
+                products = JsonSerializer.Deserialize<List<Product>>(json);
+            }
+            else {
+                products = await _context.Products.ToListAsync();
+                json = JsonSerializer.Serialize<List<Product>>(products);
+
+                var options = new DistributedCacheEntryOptions()
+                                .SetSlidingExpiration(TimeSpan.FromSeconds(20))
+                                .SetAbsoluteExpiration(TimeSpan.FromMinutes(1));
+                                
+                await _cache.SetStringAsync(cacheKey, json);
+            }
 
             return View(products);
         }
